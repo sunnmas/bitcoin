@@ -4,7 +4,7 @@ require 'securerandom'
 
 class Keys
 	# Сгенерировать ключи
-	def generate private_key = nil
+	def generate private_key = nil #на вход шестнадцатеричную строку
 		# В криптовалютах используется так называемая криптография на эллиптических кривых.
 		# Если на пальцах, то эллиптическая кривая —  функция, записываемая в
 		# виде формы Вейерштрасса: y^2=x^3+ax+b и рассматриваемая на конечном поле.
@@ -18,7 +18,6 @@ class Keys
 		group = ECDSA::Group::Secp256k1
 
 		# Закрытый ключ это случайное число от 1 до p (group.order - порядок поля)
-		puts "opts: #{private_key}"
 		if private_key != nil
 			@private_key = private_key.to_i 16
 		else
@@ -48,12 +47,23 @@ class Keys
 	end
 
 	# Показать закрытый ключ
-	def priv
-		return @private_key.to_s(16).upcase #приватник в виде шестнадцатеричного числа
+	def priv opts
+		priv_s = @private_key.to_s(16)
+		if opts[:hex] #приватник в виде шестнадцатеричного числа
+			return priv_s.upcase
+		elsif opts[:wif]
+			chksum = Digest::SHA256.hexdigest ['80'+priv_s].pack('H*')
+			chksum = Digest::SHA256.hexdigest [chksum].pack('H*')
+			chksum = chksum[0..7]
+			wif = ('80'+priv_s+chksum).to_i 16
+			wif = base58 wif
+			return wif
+		end
+		return priv_s.upcase
 	end
 
 	# Показать открытый ключ в сжатом и несжатом формате
-	def pub compressed = true
+	def pub opts = {:compressed => false}
 		# По сути открытый ключ это точка на эллиптической кривой.
 		# Мы можем удалить одну координату оставив только ее знак, т.о. сократив запись.
 		# Зная уравнение кривой всегда можно восстановить вторую координату.
@@ -64,28 +74,26 @@ class Keys
 		# Таким образом краткая запись открытого ключа
 		# 0x02 координатаХ_hex, если Y - четная, либо
 		# 0x03 координатаX_hex, если Y - нечетная
-		if compressed
+		if opts[:compressed]
 			o1 = "02#{@public_key.x.to_s(16).upcase}" if @public_key.y.even? 
 			o1 = "03#{@public_key.x.to_s(16).upcase}" if @public_key.y.odd?
 			return o1
+		elsif opts[:as_point]
+			return @public_key
 		else
 			return "04#{@public_key.x.to_s(16).upcase}#{@public_key.y.to_s(16)}".upcase
 		end
-	end
-
-	def pub_as_point
-		return @public_key
 	end
 
 	def hash160_pub
 		return @hash160_public_key
 	end
 
-	def address decoded = false
-		if decoded
-			return @address
-		else
+	def address opts = {:b58 => false}
+		if opts[:b58]
 			return '1'+base58(@address.to_i 16)
+		else
+			return @address
 		end
 	end
 private
@@ -99,3 +107,12 @@ private
 		end
 	end
 end
+
+#Проверка правильности генерации адреса:
+#https://brainwalletx.github.io/#sign
+
+key = Keys.new
+key.generate
+puts key.priv wif: true
+puts key.pub compressed: true
+puts key.address b58: true
