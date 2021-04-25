@@ -37,20 +37,21 @@ class Keys
 		# Адрес вычисляется по следующиму алгоритму:
 		# SHA256 и RIPEMD160 - известные алгоритмы подсчета хешей
 		# BASE58 перекодировка в формат base 58
-		@address = Digest::SHA2.hexdigest [pub].pack('H*')
+		@address = Digest::SHA2.hexdigest [pub(compressed: true)].pack('H*')
 		@address = Digest::RMD160.hexdigest [@address].pack('H*')
 		@hash160_public_key = @address
 		chksum = Digest::SHA256.hexdigest ['00'+@address].pack('H*')
 		chksum = Digest::SHA256.hexdigest [chksum].pack('H*')
 		chksum = chksum[0..7]
-		@address = ('00'+@address+chksum).upcase
+		@address = ('00'+@address+chksum)
 	end
 
 	# Показать закрытый ключ
 	def priv opts
+		# 02345453
 		priv_s = @private_key.to_s(16)
 		if opts[:hex] #приватник в виде шестнадцатеричного числа
-			return priv_s.upcase
+			return priv_s
 		elsif opts[:wif]
 			chksum = Digest::SHA256.hexdigest ['80'+priv_s].pack('H*')
 			chksum = Digest::SHA256.hexdigest [chksum].pack('H*')
@@ -59,7 +60,7 @@ class Keys
 			wif = base58 wif
 			return wif
 		end
-		return priv_s.upcase
+		return priv_s
 	end
 
 	# Показать открытый ключ в сжатом и несжатом формате
@@ -75,23 +76,23 @@ class Keys
 		# 0x02 координатаХ_hex, если Y - четная, либо
 		# 0x03 координатаX_hex, если Y - нечетная
 		if opts[:compressed]
-			o1 = "02#{@public_key.x.to_s(16).upcase}" if @public_key.y.even? 
-			o1 = "03#{@public_key.x.to_s(16).upcase}" if @public_key.y.odd?
+			o1 = "02#{@public_key.x.to_s(16)}" if @public_key.y.even? 
+			o1 = "03#{@public_key.x.to_s(16)}" if @public_key.y.odd?
 			return o1
 		elsif opts[:as_point]
 			return @public_key
+		elsif opts[:compressed]==false
+			return "04#{@public_key.x.to_s(16)}#{@public_key.y.to_s(16)}"
 		else
-			return "04#{@public_key.x.to_s(16).upcase}#{@public_key.y.to_s(16)}".upcase
+			return "04#{@public_key.x.to_s(16)}#{@public_key.y.to_s(16)}"
 		end
-	end
-
-	def hash160_pub
-		return @hash160_public_key
 	end
 
 	def address opts = {:b58 => false}
 		if opts[:b58]
 			return '1'+base58(@address.to_i 16)
+		elsif opts[:hash160]
+			return @hash160_public_key
 		else
 			return @address
 		end
@@ -110,9 +111,3 @@ end
 
 #Проверка правильности генерации адреса:
 #https://brainwalletx.github.io/#sign
-
-key = Keys.new
-key.generate
-puts key.priv wif: true
-puts key.pub compressed: true
-puts key.address b58: true
